@@ -18,6 +18,7 @@ import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.AsyncTask;
 import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 
@@ -27,6 +28,11 @@ import org.json.JSONArray;
 import org.json.JSONException;
 
 import java.util.Arrays;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
+import java.net.HttpURLConnection;
 
 import static com.dieam.reactnativepushnotification.modules.RNPushNotification.LOG_TAG;
 import static com.dieam.reactnativepushnotification.modules.RNPushNotificationAttributes.fromJson;
@@ -128,7 +134,16 @@ public class RNPushNotificationHelper {
         }
     }
 
-    public void sendToNotificationCentre(Bundle bundle) {
+    public void sendToNotificationCentre(final Bundle bundle) {
+        new AsyncTask<Void,Void,Void>(){
+            protected Void doInBackground(Void... unsued){
+                RNPushNotificationHelper.this._sendToNotificationCentre(bundle);
+                return null;
+            }
+        }.execute();
+    }
+
+    private void _sendToNotificationCentre(Bundle bundle) {
         try {
             Class intentClass = getMainActivityClass();
             if (intentClass == null) {
@@ -223,6 +238,28 @@ public class RNPushNotificationHelper {
             }
 
             notification.setStyle(new NotificationCompat.BigTextStyle().bigText(bigText));
+
+            //picture
+            String picture = bundle.getString("picture");
+            if(picture!=null){
+                NotificationCompat.BigPictureStyle bigPicture = new NotificationCompat.BigPictureStyle();
+
+                if (picture.startsWith("http://") || picture.startsWith("https://")) {
+                    Bitmap bitmap = getBitmapFromURL(picture);
+                    bigPicture.bigPicture(bitmap);
+                } else {
+                    int pictureResId = res.getIdentifier(picture, "mipmap", packageName);
+                    Bitmap pictureResIdBitmap = BitmapFactory.decodeResource(res, pictureResId);
+
+                    if (pictureResId != 0) {
+                        bigPicture.bigPicture(pictureResIdBitmap);
+                    }
+                }
+                bigPicture.setBigContentTitle(title);
+                bigPicture.setSummaryText(bigText);
+
+                notification.setStyle(bigPicture);
+            }
 
             Intent intent = new Intent(context, intentClass);
             intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -462,6 +499,20 @@ public class RNPushNotificationHelper {
             editor.commit();
         } else {
             editor.apply();
+        }
+    }
+
+    public Bitmap getBitmapFromURL(String strURL) {
+        try {
+            URL url = new URL(strURL);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setDoInput(true);
+            connection.connect();
+            InputStream input = connection.getInputStream();
+            return BitmapFactory.decodeStream(input);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
         }
     }
 }
